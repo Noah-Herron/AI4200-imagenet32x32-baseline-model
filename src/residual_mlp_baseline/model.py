@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 # Each task differs only in its input size and its number of classes.
@@ -12,7 +13,7 @@ TASKS = {
 
 
 class Block(nn.Module):
-    """One residual block:  x + Linear(tanh(Linear(LayerNorm(x))))
+    """One residual block:  x + Linear(SiLU(Linear(LayerNorm(x))))
 
     The block expands to `hidden` features, applies tanh, and projects back to
     `width` features so its output can be added to its input (the skip connection).
@@ -25,7 +26,7 @@ class Block(nn.Module):
         self.fc2 = nn.Linear(hidden, width)   # project: hidden -> width
 
     def forward(self, x):
-        h = self.fc2(torch.tanh(self.fc1(self.norm(x))))
+        h = self.fc2(F.silu(self.fc1(self.norm(x))))
         return x + h                          # skip connection: add the input back
 
 
@@ -41,7 +42,7 @@ class ResidualMLP(nn.Module):
     differs from its input size (width), so the two cannot be added.
     """
 
-    def __init__(self, in_features, num_classes, width=128, hidden=256, depth=30):
+    def __init__(self, in_features, num_classes, width=192, hidden=512, depth=10):
         super().__init__()
 
         # Project the flattened image down to the backbone width.
@@ -70,7 +71,7 @@ class ResidualMLP(nn.Module):
         x = self.input_layer(x)
         for block in self.blocks:
             x = block(x)
-        x = self.head_fc2(torch.tanh(self.head_fc1(self.head_norm(x))))
+        x = self.head_fc2(F.silu(self.head_fc1(self.head_norm(x))))
         return x
 
     def predict(self, x):
